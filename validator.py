@@ -35,7 +35,7 @@ from urllib.parse import urlparse
 import pandas as pd
 import requests
 
-TEMPLATE_NAME = "dimer-dataset-validator-mitra-regressor"
+TEMPLATE_NAME = "mitra-regressor-dataset-validator"
 DATASET_DIR = Path(os.getenv("DIMER_DATASET_DIR", "/data/dataset"))
 RESULT_PATH = Path(os.getenv("DIMER_RESULT_PATH", "/data/dataset-validations/result.json"))
 DONE_CALLBACK = os.getenv("DIMER_DONE_CALLBACK", "").strip()

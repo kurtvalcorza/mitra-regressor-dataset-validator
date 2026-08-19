@@ -47,8 +47,22 @@ MITRA_FEATURE_LIMIT = 500  # upstream feature ceiling for Mitra
 # Keep this block byte-identical across the validator and finetuner containers.
 # The CI parity check (scripts/check_shared.py) enforces it.
 # ============================================================================
-MAX_TOTAL_UNCOMPRESSED_BYTES = int(os.getenv("DIMER_MAX_UNCOMPRESSED_BYTES", str(4 * 1024**3)))
-MAX_COMPRESSION_RATIO = float(os.getenv("DIMER_MAX_COMPRESSION_RATIO", "200"))
+def _safe_int(value: str | None, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: str | None, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_TOTAL_UNCOMPRESSED_BYTES = _safe_int(os.getenv("DIMER_MAX_UNCOMPRESSED_BYTES"), 4 * 1024**3)
+MAX_COMPRESSION_RATIO = _safe_float(os.getenv("DIMER_MAX_COMPRESSION_RATIO"), 200.0)
 _DATASET_DIR_ALIASES = {"dataset", "datasets"}
 
 
@@ -312,6 +326,18 @@ def _build_checks(cfg: Config, source: DatasetSource) -> tuple[list[dict[str, An
     if not has_target:
         return checks, meta
 
+    target_dropped = cfg.target_column in cfg.drop_columns
+    checks.append({
+        "name": "target_not_dropped", "successful": not target_dropped,
+        "message": (
+            "Target column is not listed in drop_columns." if not target_dropped
+            else f"Target column '{cfg.target_column}' also appears in drop_columns; remove it "
+                 f"from drop_columns."
+        ),
+    })
+    if target_dropped:
+        return checks, meta
+
     target = train[cfg.target_column]
     usable_mask = _usable_target_mask(target)
     usable = int(usable_mask.sum())
@@ -371,27 +397,38 @@ def _build_checks(cfg: Config, source: DatasetSource) -> tuple[list[dict[str, An
         ),
     })
 
-    # val/test: columns must match train (schema check).
+    # val/test: columns must match train, and a supplied holdout must carry usable labels.
     for stem in ("val", "test"):
         path = source.resolve_single(stem)
         if path is None:
             continue
         try:
-            other_cols = list(source.read_csv(path, nrows=5).columns)
+            other = source.read_csv(path)
         except Exception as exc:  # noqa: BLE001
             checks.append({
                 "name": f"{stem}_csv_parses", "successful": False,
                 "message": f"{stem}.csv could not be parsed: {exc}",
             })
             continue
-        same = set(other_cols) == set(columns)
+        same = set(other.columns) == set(columns)
         checks.append({
             "name": f"{stem}_schema_matches_train", "successful": same,
             "message": (
                 f"{stem}.csv columns match train.csv." if same
-                else f"{stem}.csv columns {other_cols} differ from train {columns}."
+                else f"{stem}.csv columns {list(other.columns)} differ from train {columns}."
             ),
         })
+        if same and cfg.target_column in other.columns:
+            usable_other = int(_usable_target_mask(other[cfg.target_column]).sum())
+            checks.append({
+                "name": f"{stem}_has_usable_targets", "successful": usable_other > 0,
+                "message": (
+                    f"{stem}.csv has {usable_other} usable (finite) target rows."
+                    if usable_other > 0
+                    else f"{stem}.csv has no usable (finite numeric) target values; it would be "
+                         f"scored on zero rows."
+                ),
+            })
 
     return checks, meta
 

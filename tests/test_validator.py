@@ -89,3 +89,21 @@ def test_zip_bomb_guard(tmp_path, monkeypatch):
     _zip(tmp_path, {"train.csv": big})
     with pytest.raises(ValueError):
         V.DatasetSource(tmp_path)
+
+
+def test_target_in_drop_columns_fails(tmp_path):
+    checks, _ = _run(tmp_path, {"train.csv": _train(60)}, drop="target")
+    assert checks["target_not_dropped"] is False
+
+
+def test_val_with_no_usable_targets_fails(tmp_path):
+    train = _train(60)
+    val = _train(20).copy()
+    val["target"] = "x"  # non-numeric -> zero usable
+    checks, _ = _run(tmp_path, {"train.csv": train, "val.csv": val})
+    assert checks["val_has_usable_targets"] is False
+
+
+def test_safe_parse_bad_env():
+    assert V._safe_int("nope", 123) == 123
+    assert V._safe_float(None, 1.5) == 1.5

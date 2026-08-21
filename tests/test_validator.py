@@ -47,6 +47,7 @@ def test_happy_path_negative_targets_ok(tmp_path):
     checks, meta = _run(tmp_path, {"train.csv": _train(60)})  # targets include negatives
     assert all(checks.values()), checks
     assert meta["usableRowCount"] == 60
+    assert meta["classNames"] == []  # DIMER-mandatory metadata key (empty for regression)
 
 
 def test_duplicate_train_rejected(tmp_path):

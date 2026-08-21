@@ -308,7 +308,9 @@ def _usable_target_mask(target: pd.Series) -> pd.Series:
 
 def _build_checks(cfg: Config, source: DatasetSource) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     checks: list[dict[str, Any]] = []
-    meta: dict[str, Any] = {"targetColumn": cfg.target_column, "dropColumns": cfg.drop_columns}
+    # `classNames` is a DIMER-mandatory metadata key; regression has no classes, so it
+    # is always an empty array. Present on every return path.
+    meta: dict[str, Any] = {"targetColumn": cfg.target_column, "dropColumns": cfg.drop_columns, "classNames": []}
 
     checks.append({
         "name": "no_nested_zip",
